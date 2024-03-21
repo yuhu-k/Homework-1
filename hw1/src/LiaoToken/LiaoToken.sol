@@ -14,12 +14,12 @@ interface IERC20 {
 }
 
 contract LiaoToken is IERC20 {
-    // TODO: you might need to declare several state variable here
-    mapping(address account => uint256) private _balances;
-    mapping(address account => bool) isClaim;
+    // Correcting the mapping declaration
+    mapping(address => uint256) private _balances;
+    mapping(address => bool) private isClaim;
+    mapping(address => mapping(address => uint256)) private _allowances;
 
     uint256 private _totalSupply;
-
     string private _name;
     string private _symbol;
 
@@ -51,26 +51,44 @@ contract LiaoToken is IERC20 {
     }
 
     function claim() external returns (bool) {
-        if (isClaim[msg.sender]) revert();
+        if (isClaim[msg.sender]) revert("Claim: already claimed.");
         _balances[msg.sender] += 1 ether;
         _totalSupply += 1 ether;
+        isClaim[msg.sender] = true; // 防止重複領取
         emit Claim(msg.sender, 1 ether);
         return true;
     }
 
-    function transfer(address to, uint256 amount) external returns (bool) {
-        // TODO: please add your implementaiton here
+    function transfer(address to, uint256 amount) external override returns (bool) {
+        require(_balances[msg.sender] >= amount, "Insufficient balance");
+        _balances[msg.sender] -= amount;
+        _balances[to] += amount;
+        emit Transfer(msg.sender, to, amount);
+        return true;
     }
 
-    function transferFrom(address from, address to, uint256 value) external returns (bool) {
-        // TODO: please add your implementaiton here
+    function transferFrom(address from, address to, uint256 amount) external override returns (bool) {
+        require(from != address(0), "ERC20: transfer from the zero address");
+        require(to != address(0), "ERC20: transfer to the zero address");
+        require(_balances[from] >= amount, "ERC20: transfer amount exceeds balance");
+        require(_allowances[from][msg.sender] >= amount, "ERC20: transfer amount exceeds allowance");
+    
+        _balances[from] -= amount;
+        _balances[to] += amount;
+        _allowances[from][msg.sender] -= amount;
+    
+        emit Transfer(from, to, amount);
+    
+        return true;
     }
 
-    function approve(address spender, uint256 amount) external returns (bool) {
-        // TODO: please add your implementaiton here
+    function approve(address spender, uint256 amount) external override returns (bool) {
+        _allowances[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
+        return true;
     }
 
-    function allowance(address owner, address spender) public view returns (uint256) {
-        // TODO: please add your implementaiton here
+    function allowance(address owner, address spender) public view override returns (uint256) {
+        return _allowances[owner][spender];
     }
 }
