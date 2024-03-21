@@ -75,30 +75,94 @@ contract NFinTech is IERC721 {
     }
 
     function setApprovalForAll(address operator, bool approved) external {
-        // TODO: please add your implementaiton here
+        require(msg.sender != operator, "ERC721: approve to caller");
+        require(operator != address(0), "ERC721: approve to the zero address"); // 添加對零地址的檢查
+        _operatorApproval[msg.sender][operator] = approved;
+        emit ApprovalForAll(msg.sender, operator, approved);
+    }
+
+    function _isContract(address account) internal view returns (bool) {
+        uint256 size;
+        assembly {
+            size := extcodesize(account)
+        }
+        return size > 0;
+    }
+
+    function _checkOnERC721Received(address from, address to, uint256 tokenId, bytes memory _data) private returns (bool) {
+        if (_isContract(to)) { // 使用_isContract方法替換to.isContract()
+            try IERC721TokenReceiver(to).onERC721Received(msg.sender, from, tokenId, _data) returns (bytes4 retval) {
+                return retval == IERC721TokenReceiver.onERC721Received.selector;
+            } catch (bytes memory reason) {
+                if (reason.length == 0) {
+                    revert("ERC721: transfer to non ERC721Receiver implementer");
+                } else {
+                    assembly {
+                        revert(add(32, reason), mload(reason))
+                    }
+                }
+            }
+        } else {
+            return true;
+        }
     }
 
     function isApprovedForAll(address owner, address operator) public view returns (bool) {
-        // TODO: please add your implementaiton here
+        return _operatorApproval[owner][operator];
     }
 
     function approve(address to, uint256 tokenId) external {
-        // TODO: please add your implementaiton here
+        _approve(to, tokenId);
     }
 
     function getApproved(uint256 tokenId) public view returns (address operator) {
-        // TODO: please add your implementaiton here
+        require(_owner[tokenId] != address(0), "ERC721: approved query for nonexistent token");
+
+        return _tokenApproval[tokenId];
     }
 
     function transferFrom(address from, address to, uint256 tokenId) public {
-        // TODO: please add your implementaiton here
+        require(_owner[tokenId] == from);
+        require(to != address(0));
+        require(_isApprovedOrOwner(msg.sender, tokenId));
+
+        // 清除現有的授權
+        _approve(address(0), tokenId);
+
+        // 更新擁有者和餘額
+        _balances[from] -= 1;
+        _balances[to] += 1;
+        _owner[tokenId] = to;
+
+        emit Transfer(from, to, tokenId);
+    }
+
+    function _isApprovedOrOwner(address spender, uint256 tokenId) internal view returns (bool) {
+        address owner = ownerOf(tokenId);
+        return (spender == owner || getApproved(tokenId) == spender || isApprovedForAll(owner, spender));
     }
 
     function safeTransferFrom(address from, address to, uint256 tokenId, bytes calldata data) public {
-        // TODO: please add your implementaiton here
+        _safeTransferFrom(from, to, tokenId, data);
     }
 
     function safeTransferFrom(address from, address to, uint256 tokenId) public {
-        // TODO: please add your implementaiton here
+        _safeTransferFrom(from, to, tokenId, "");
+    }
+
+    function _safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data) internal {
+        require(_owner[tokenId] == from, "ERC721: transfer of token that is not own");
+        require(to != address(0), "ERC721: transfer to the zero address");
+        transferFrom(from, to, tokenId); // 使用已經實現的transferFrom進行轉移
+
+        require(_checkOnERC721Received(from, to, tokenId, data), "ERC721: transfer to non ERC721Receiver implementer");
+    }
+
+    function _approve(address to, uint256 tokenId) internal {
+        address owner = ownerOf(tokenId);
+        require(to != owner, "ERC721: approval to current owner");
+
+        _tokenApproval[tokenId] = to;
+        emit Approval(owner, to, tokenId);
     }
 }
